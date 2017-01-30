@@ -4,10 +4,10 @@ from bs4 import BeautifulSoup as Soup
 from base64 import b64decode
 from json import loads
 from argparse import ArgumentParser
-from sys import exit, stderr, argv
+from sys import exit, stderr
 from collections import OrderedDict
 
-def get_ep_info_url(show, season="1", episode="1", bulk=False):
+def get_ep_info(show):
     show = "-".join(show.lower().split(" "))
     page = Soup(get("http://putlockers.ch/watch-{}-tvshow-online-free-putlocker.html".format(show)).text, "html.parser")
     seasons = [a.text.split()[-1] for a in page.findAll("a", {"class": "selector_name"})]
@@ -17,11 +17,7 @@ def get_ep_info_url(show, season="1", episode="1", bulk=False):
         eps[s] = OrderedDict()
         for a in episode_tables[i].findAll("a"):
             eps[s][a.text.split()[-1]] = a["href"]
-    if bulk:
-        return eps
-    if season in eps:
-        if episode in eps[season]:
-            return eps[episode]
+    return eps
 
 def get_video_urls(page_url):
     page = get(page_url).text
@@ -36,37 +32,45 @@ def get_video_urls(page_url):
 
 def main():
     parser = ArgumentParser(prog="watchshow")
-    parser.add_argument("show", help="Name of show to get")
-    if "-b" not in argv:
-        parser.add_argument("season", help="Season number")
-        parser.add_argument("episode", help="Episode number")
-    else:
-        parser.add_argument("-b", "--bulk", help="Return bulk episode urls", action="store_true")
+    parser.add_argument("show", help="Show name")
+    parser.add_argument("season", help="Season number", nargs="?")
+    parser.add_argument("episode", help="Episode number", nargs="?")
+    parser.add_argument("--wget", help="Print wget command line string", action="store_true")
     args = parser.parse_args()
-    if "bulk" in args:
-        eps = get_ep_info_url(args.show, bulk=True)
+    if not args.show:
+        parser.print_help()
+        return 1
+    eps = get_ep_info(args.show)
+    if not args.episode:
         for season,episodes in eps.items():
+            if args.season and args.season != season:
+                continue
             for episode,url in episodes.items():
-                print("{} {}: ".format(season, episode), file=stderr)
                 try:
                     vid_url = get_video_urls(url)[-1]["file"]
-                    print(vid_url)
+                    print(vid_url if not args.wget else 
+""" wget "{}" -o "{} S{}E{}.mp4" """.format(vid_url, args.show, season.zfill(2), episode.zfill(2))
+                    )
                 except (KeyError, IndexError):
-                    pass
-                except KeyboardInterrupt:
-                    print("Aborted", file=stderr)
-                    return 130
-        return 0
-    page_url = get_ep_info_url(args.show, args.season, args.episode)
-    if not page_url:
-        print("Season/episode not found", file=stderr)
-        return 1
-    sources = get_video_urls(page_url)
-    if not sources:
-        print("No video found", file=stderr)
+                    print("No video found for s{}e{}".format(season.zfill(2), episode.zfill(2)), file=stderr)
+    elif args.season in eps:
+        if args.episode in eps[args.season]:
+            sources = get_video_urls(eps[args.season][args.episode])
+            if not sources:
+                print("No video found", file=stderr)
+                return 2
+            print(sources[-1]["file"])
+        else:
+            print("Episode not found", file=stderr)
+            return 2
+    else:
+        print("Season not found", file=stderr)
         return 2
-    print(sources[-1]["file"])
     return 0
 
 if __name__ == "__main__":
-    exit(main())
+    try:
+        exit(main())
+    except KeyboardInterrupt:
+        print("Aborted", file=stderr)
+        exit(130)

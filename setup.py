@@ -9,7 +9,7 @@ setup(
     entry_points = {
         "console_scripts": ["watchshow = watchshow.watchshow:main"]
         },
-    version = "1.0.0",
+    version = "1.1.0",
     description = desc,
     long_description = desc,
     author = "Steven Smith",
