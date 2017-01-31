@@ -1,6 +1,6 @@
 from setuptools import setup
 
-desc = "A tool that gets a video url for a given show name, season number and episode number"
+desc = "A tool that gets a video url for a given show name, season number and episode number, and lets you download said url"
 
 setup(
     name = "watchshow",
@@ -9,7 +9,7 @@ setup(
     entry_points = {
         "console_scripts": ["watchshow = watchshow.watchshow:main"]
         },
-    version = "1.1.0",
+    version = "1.2.0",
     description = desc,
     long_description = desc,
     author = "Steven Smith",

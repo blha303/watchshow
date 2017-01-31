@@ -6,6 +6,7 @@ from json import loads
 from argparse import ArgumentParser
 from sys import exit, stderr
 from collections import OrderedDict
+from os.path import join as os_join
 
 def get_ep_info(show):
     show = "-".join(show.lower().split(" "))
@@ -30,12 +31,25 @@ def get_video_urls(page_url):
     sources = video_page.split("sources: ")[1].split(",\n")[0]
     return loads(sources.replace('{file:', '{"file":').replace(',label:', ',"label":'))
 
+def download(url, filename):
+    req = get(url, stream=True)
+    total = int(req.headers.get("Content-Length"))
+    with open(filename, "wb") as f:
+        progress = 0
+        for chunk in req.iter_content(1024):
+            if chunk:
+                f.write(chunk)
+                f.flush()
+                progress += len(chunk)
+                print("\r{}: {:3.1f}% ({}/{})     ".format(filename, progress / total * 100, progress, total), end="")
+
 def main():
     parser = ArgumentParser(prog="watchshow")
     parser.add_argument("show", help="Show name")
     parser.add_argument("season", help="Season number", nargs="?")
     parser.add_argument("episode", help="Episode number", nargs="?")
-    parser.add_argument("--wget", help="Print wget command line string", action="store_true")
+    parser.add_argument("--dl", help="Download episode", action="store_true")
+    parser.add_argument("--directory", help="Target directory for download", default=".")
     args = parser.parse_args()
     if not args.show:
         parser.print_help()
@@ -48,9 +62,10 @@ def main():
             for episode,url in episodes.items():
                 try:
                     vid_url = get_video_urls(url)[-1]["file"]
-                    print(vid_url if not args.wget else 
-""" wget "{}" -o "{} S{}E{}.mp4" """.format(vid_url, args.show, season.zfill(2), episode.zfill(2))
-                    )
+                    if args.dl:
+                        download(vid_url, os_join(args.directory, "{} S{}E{}.mp4".format(args.show, season.zfill(2), episode.zfill(2))))
+                    else:
+                        print(vid_url)
                 except (KeyError, IndexError):
                     print("No video found for s{}e{}".format(season.zfill(2), episode.zfill(2)), file=stderr)
     elif args.season in eps:
@@ -59,7 +74,10 @@ def main():
             if not sources:
                 print("No video found", file=stderr)
                 return 2
-            print(sources[-1]["file"])
+            if args.dl:
+                download(sources[-1]["file"], os_join(args.directory, "{} S{}E{}.mp4".format(args.show, args.season.zfill(2), args.episode.zfill(2))))
+            else:
+                print(sources[-1]["file"])
         else:
             print("Episode not found", file=stderr)
             return 2
